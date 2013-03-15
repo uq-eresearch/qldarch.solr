@@ -17,7 +17,8 @@
     <!-- NOTE#1: dist also generates an unversioned jar file to allow easy inclusion in -->
     <!--         downstream build automation. This file should not be distributed outside -->
     <!--         a controlled build environment. -->
-    <property name="version" value="0.0.1"/>
+    <property name="project.name" value="qldarch-ingest"/>
+    <property name="project.version" value="0.0.1"/>
 
     <property name="src" location="src"/>
     <property name="build" location="build"/>
