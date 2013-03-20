@@ -81,6 +81,11 @@ public class Main {
                 .withDescription("URL prefix where the omeka archive files are stored.")
                 .hasArg(true)
                 .create("a"));
+        options.addOption(OptionBuilder
+                .withLongOpt("outputdir")
+                .withDescription("A directory, preferably empty, where output files are written.")
+                .hasArg(true)
+                .create("o"));
 
         return options;
     }
