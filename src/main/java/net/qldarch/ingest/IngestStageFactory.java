@@ -1,6 +1,6 @@
 package net.qldarch.ingest;
 
-public interface IngestStageFactory {
+public interface IngestStageFactory<T extends IngestStage> {
     public String getStageName();
-    public IngestStage createIngestStage(Configuration configuration);
+    public T createIngestStage(Configuration configuration);
 }

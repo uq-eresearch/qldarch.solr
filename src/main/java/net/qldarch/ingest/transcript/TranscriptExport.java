@@ -11,6 +11,11 @@ import java.util.Map;
 
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.io.FileUtils;
+import org.dom4j.Document;
+import org.dom4j.DocumentHelper;
+import org.dom4j.Element;
+import org.dom4j.io.OutputFormat;
+import org.dom4j.io.XMLWriter;
 import org.openrdf.model.Literal;
 import org.openrdf.model.URI;
 import org.openrdf.model.Value;
@@ -80,10 +85,12 @@ public class TranscriptExport implements IngestStage {
                 } else if (!(transcript instanceof URI)) {
                     System.out.println("transcript(" + transcript.toString() + ") not URI");
                 } else {
+                    URL interviewURL = new URL(interview.toString());
+                    URL transcriptURL = new URL(transcript.toString());
                     String locationString = ((Literal)location).getLabel();
                     String srcString = ((Literal)sourceFilename).getLabel();
 
-                    writeSummaryFile((URI)interview, (URI)transcript, locationString, srcString);
+                    writeSummaryFile(interviewURL, transcriptURL, locationString, srcString);
 
                     URL locationURL = new URL(new URL(configuration.getArchivePrefix()),
                             ((Literal)location).getLabel());
@@ -101,7 +108,7 @@ public class TranscriptExport implements IngestStage {
                             transcript.toString() + " " +
                             parser.getTitle());
                     writeJsonTranscript(srcString, parser);
-
+                    writeSolrIngest(srcString, interviewURL, transcriptURL, parser);
                 }
             }
         } catch (RepositoryException er) {
@@ -117,7 +124,7 @@ public class TranscriptExport implements IngestStage {
         }
     }
 
-    private void writeSummaryFile(URI interview, URI transcript, String location, String source)
+    private void writeSummaryFile(URL interview, URL transcript, String location, String source)
             throws IOException {
         File summaryFile = new File(configuration.getOutputDir(),
                 FilenameUtils.getBaseName(source) + ".summary");
@@ -141,5 +148,38 @@ public class TranscriptExport implements IngestStage {
         parser.printJson(ps);
         ps.flush();
         ps.close();
+    }
+
+    private void writeSolrIngest(String source, URL interview, URL transcript,
+            TranscriptParser parser) throws IOException {
+        File xmlFile = new File(configuration.getOutputDir(),
+                FilenameUtils.getBaseName(source) + "-solr.xml");
+        if (xmlFile.exists()) {
+            System.out.println("Error, " + xmlFile + " already exists");
+            return;
+        }
+
+        Document document = DocumentHelper.createDocument();
+        Element root = document.addElement("add")
+            .addAttribute("commitWithin", "30000")
+            .addAttribute("overwrite", configuration.getSolrOverwrite() ? "true" : "false");
+
+        for (TranscriptParser.Utterance entry : parser.getInterview()) {
+            Element doc = root.addElement("doc");
+            doc.addElement("field")
+                .addAttribute("name", "id")
+                .addText(transcript.toString() + "#" + entry.getTimestamp());
+            doc.addElement("field")
+                .addAttribute("name", "interview")
+                .addText(interview.toString());
+            doc.addElement("field")
+                .addAttribute("name", "transcript")
+                .addText(entry.getUtterance());
+        }
+
+        XMLWriter writer = new XMLWriter(FileUtils.openOutputStream(xmlFile),
+                OutputFormat.createPrettyPrint());
+        writer.write(document);
+        writer.close();
     }
 }

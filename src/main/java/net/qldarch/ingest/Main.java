@@ -12,34 +12,42 @@ import org.apache.commons.cli.OptionBuilder;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 
+import net.qldarch.ingest.transcript.SolrIngestFactory;
 import net.qldarch.ingest.transcript.TranscriptExportFactory;
 
 public class Main {
     public static IngestStageFactory[] ingestFactories = {
         new TranscriptExportFactory(),
+        new SolrIngestFactory(),
     };
 
     public static void main(String[] args) {
         Options options = ingestOptions();
+
+        Map<String,IngestStageFactory> factories = new HashMap<String,IngestStageFactory>();
+        for (IngestStageFactory factory : ingestFactories) {
+            factories.put(factory.getStageName(), factory);
+        }
+
         try {
-            CommandLine cmdline = parseArguments(args, options);
-            if (cmdline.hasOption("help")) {
-                printHelp(options);
-                System.exit(0);
-            }
+            try {
+                CommandLine cmdline = parseArguments(args, options);
+                if (cmdline.hasOption("help")) {
+                    printHelp(options);
+                    System.exit(0);
+                }
 
-            Configuration config = new Configuration(cmdline);
+                Configuration config = new Configuration(cmdline, factories.keySet());
 
-            Map<String,IngestStageFactory> factories = new HashMap<String,IngestStageFactory>();
-            for (IngestStageFactory factory : ingestFactories) {
-                factories.put(factory.getStageName(), factory);
+                for (String stage : config.getStages()) {
+                    System.out.println("Creating and activating stage: " + stage);
+                    factories.get(stage).createIngestStage(config).ingest();
+                }
+            } catch (ParseException ep) {
+                throw new ConfigurationException("Error parsing command line", ep);
             }
-
-            for (String stage : config.getStages()) {
-                factories.get(stage).createIngestStage(config).ingest();
-            }
-        } catch (ParseException em) {
-            System.err.println(em.getMessage());
+        } catch (ConfigurationException ec) {
+            System.err.println(ec.getMessage());
 
             PrintWriter pw = new PrintWriter(System.err);
             new HelpFormatter().printUsage(pw, 80, "qldarch-ingest", options);
@@ -52,13 +60,14 @@ public class Main {
         }
     }
 
+    // FIXME: Move all this into Configuration.java
     public static Options ingestOptions() {
         Options options = new Options();
         options.addOption(OptionBuilder
                 .withLongOpt("stages")
-                .withDescription("Ingest stage to perform.")
+                .withDescription("Ingest stages to perform as a colon seperated list.")
                 .hasArgs()
-                .withValueSeparator(',')
+                .withValueSeparator(':')
                 .create("t"));
         options.addOption(OptionBuilder
                 .withLongOpt("help")
@@ -67,18 +76,21 @@ public class Main {
         options.addOption(OptionBuilder
                 .withLongOpt("endpoint")
                 .withDescription("Server URL for a sesame-protocol sparql endpoint " +
-                    "containing the archive metadata required for ingest process.")
+                    "containing the archive metadata required for ingest process. Default is: " +
+                    Configuration.DEFAULT_ENDPOINT)
                 .hasArg(true)
                 .create("e"));
         options.addOption(OptionBuilder
                 .withLongOpt("repository")
                 .withDescription("Repository Name identifying a repository at the " +
-                    "containing the archive metadata required for ingest process.")
+                    "containing the archive metadata required for ingest process. Default is: " +
+                    Configuration.DEFAULT_REPOSITORY)
                 .hasArg(true)
                 .create("r"));
         options.addOption(OptionBuilder
                 .withLongOpt("archive")
-                .withDescription("URL prefix where the omeka archive files are stored.")
+                .withDescription("URL prefix where the omeka archive files are stored. Default " +
+                    "is: " + Configuration.DEFAULT_ARCHIVE_PREFIX)
                 .hasArg(true)
                 .create("a"));
         options.addOption(OptionBuilder
@@ -86,11 +98,24 @@ public class Main {
                 .withDescription("A directory, preferably empty, where output files are written.")
                 .hasArg(true)
                 .create("o"));
+        options.addOption(OptionBuilder
+                .withLongOpt("solrurl")
+                .withDescription("URL for solr's update interface. Default is " +
+                    Configuration.DEFAULT_SOLR_URL)
+                .hasArg(true)
+                .create("s"));
+        options.addOption(OptionBuilder
+                .withLongOpt("solroverwrite")
+                .withDescription("Generate solr update files to overwrite preexisting entries" +
+                    Configuration.DEFAULT_SOLR_URL)
+                .hasArg(false)
+                .create());
 
         return options;
     }
 
-    public static CommandLine parseArguments(String[] args, Options options) throws ParseException {
+    public static CommandLine parseArguments(String[] args, Options options)
+            throws ParseException {
         return new GnuParser().parse(options, args);
     }
 

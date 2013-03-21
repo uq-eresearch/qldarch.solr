@@ -1,8 +1,10 @@
 package net.qldarch.ingest;
 
 import java.io.File;
+import java.net.URL;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.ParseException;
@@ -12,19 +14,34 @@ public class Configuration {
     public static String DEFAULT_ENDPOINT = "http://localhost:8080/openrdf-sesame";
     public static String DEFAULT_REPOSITORY = "QldarchMetadataServer";
     public static String DEFAULT_ARCHIVE_PREFIX = "http://qldarch.net/omeka/archive/files/";
+    public static String DEFAULT_SOLR_URL = "http://localhost:8080/solr/update";
 
     private File outputdir;
     private List<String> stages;
     private String endpoint;
     private String repository;
     private String archivePrefix;
+    private URL solrURL;
+    private boolean solrOverwrite;
 
-    public Configuration(CommandLine commandLine) throws ParseException {
-        this.outputdir = new File(fetchMandatory(commandLine, "outputdir"));
-        this.stages = fetchMandatoryList(commandLine, "stages");
-        this.endpoint = fetchWithDefault(commandLine, "endpoint", DEFAULT_ENDPOINT);
-        this.repository = fetchWithDefault(commandLine, "repository", DEFAULT_REPOSITORY);
-        this.archivePrefix = fetchWithDefault(commandLine, "archive", DEFAULT_ARCHIVE_PREFIX);
+    public Configuration(CommandLine commandLine, Set<String> validStages)
+            throws ConfigurationException {
+        try {
+            this.outputdir = new File(fetchMandatory(commandLine, "outputdir"));
+            this.stages = fetchMandatoryList(commandLine, "stages");
+            this.endpoint = fetchWithDefault(commandLine, "endpoint", DEFAULT_ENDPOINT);
+            this.repository = fetchWithDefault(commandLine, "repository", DEFAULT_REPOSITORY);
+            this.archivePrefix = fetchWithDefault(commandLine, "archive", DEFAULT_ARCHIVE_PREFIX);
+            this.solrURL = new URL(fetchWithDefault(commandLine, "solrurl", DEFAULT_SOLR_URL));
+            this.solrOverwrite = commandLine.hasOption("solroverwrite");
+
+            validateStages(stages, validStages);
+        } catch (Exception e) {
+            if (e instanceof ConfigurationException) throw (ConfigurationException)e;
+            // FIXME: This needs to be extended with commons-validator
+            // http://commons.apache.org/proper/commons-validator/
+            throw new ConfigurationException("Invalid argument", e);
+        }
     }
 
     public File getOutputDir() { return outputdir; }
@@ -32,6 +49,8 @@ public class Configuration {
     public String getEndpoint() { return endpoint; }
     public String getRepository() { return repository; }
     public String getArchivePrefix() { return archivePrefix; }
+    public URL getSolrURL() { return solrURL; }
+    public boolean getSolrOverwrite() { return solrOverwrite; }
 
     public static String fetchWithDefault(CommandLine commandLine, String option, String defult) {
         if (commandLine.hasOption(option)) {
@@ -42,26 +61,35 @@ public class Configuration {
     }
 
     public static List<String> fetchMandatoryList(CommandLine commandLine, String option)
-            throws ParseException {
+            throws ConfigurationException {
         if (!commandLine.hasOption(option)) {
-            throw new ParseException("Option '" + option + "' required.");
+            throw new ConfigurationException("Option '" + option + "' required.");
         }
         String[] values = commandLine.getOptionValues(option);
         if (values.length == 0) {
-            throw new ParseException("Option '" + option + "' requires at least one argument.");
+            throw new ConfigurationException("Option '" + option + "' requires at least one argument.");
         }
         return Arrays.asList(values);
     }
 
     public static String fetchMandatory(CommandLine commandLine, String option)
-            throws ParseException {
+            throws ConfigurationException {
         if (!commandLine.hasOption(option)) {
-            throw new ParseException("Option '" + option + "' required.");
+            throw new ConfigurationException("Option '" + option + "' required.");
         }
         String value = commandLine.getOptionValue(option);
         if (value == null) {
-            throw new ParseException("Option '" + option + "' requires an argument.");
+            throw new ConfigurationException("Option '" + option + "' requires an argument.");
         }
         return value;
+    }
+
+    public static void validateStages(List<String> stages, Set<String> validStages) 
+            throws ConfigurationException {
+        for (String stage : stages) {
+            if (!validStages.contains(stage)) {
+                throw new ConfigurationException("Unknown stage specified: " + stage);
+            }
+        }
     }
 }
