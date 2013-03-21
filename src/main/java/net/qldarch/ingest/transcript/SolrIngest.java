@@ -33,7 +33,7 @@ public class SolrIngest implements IngestStage {
                 continue;
             }
 
-            File resultFile = generateResultFile(inputFile);
+            File resultFile = generateResultFile(outputDir, inputFile);
             if (resultFile.exists()) {
                 System.out.println("Error, " + resultFile + " already exists");
                 continue;
@@ -73,8 +73,8 @@ public class SolrIngest implements IngestStage {
         }
     }
 
-    public File generateResultFile(File inputFile) {
-        return new File(inputFile.getName().replace("-solr.xml", "-result.xml"));
+    public File generateResultFile(File outputDir, File inputFile) {
+        return new File(outputDir, inputFile.getName().replace("-solr.xml", "-result.xml"));
     }
 
     public HttpURLConnection setupSolrConnection(URL solrURL, File inputFile) throws IOException {
