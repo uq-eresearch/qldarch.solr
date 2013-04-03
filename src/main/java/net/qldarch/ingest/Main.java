@@ -1,7 +1,9 @@
 package net.qldarch.ingest;
 
 import java.io.PrintWriter;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
 
@@ -11,6 +13,7 @@ import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.OptionBuilder;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
+import org.apache.commons.lang3.StringUtils;
 
 import net.qldarch.ingest.transcript.SolrIngestFactory;
 import net.qldarch.ingest.transcript.TranscriptExportFactory;
@@ -62,10 +65,15 @@ public class Main {
 
     // FIXME: Move all this into Configuration.java
     public static Options ingestOptions() {
+        List<String> stageNames = new ArrayList<String>();
+        for (IngestStageFactory factory : ingestFactories) {
+            stageNames.add(factory.getStageName());
+        }
+
         Options options = new Options();
         options.addOption(OptionBuilder
                 .withLongOpt("stages")
-                .withDescription("Ingest stages to perform as a colon seperated list.")
+                .withDescription("Ingest stages to perform as a colon seperated list. Valid stages are: " + StringUtils.join(stageNames, ":"))
                 .hasArgs()
                 .withValueSeparator(':')
                 .create("t"));
