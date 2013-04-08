@@ -85,42 +85,47 @@ public class TranscriptExport implements IngestStage {
                 } else if (!(transcript instanceof URI)) {
                     System.out.println("transcript(" + transcript.toString() + ") not URI");
                 } else {
-                    URL interviewURL = new URL(interview.toString());
-                    URL transcriptURL = new URL(transcript.toString());
-                    String locationString = ((Literal)location).getLabel();
-                    String srcString = ((Literal)sourceFilename).getLabel();
-
-                    writeSummaryFile(interviewURL, transcriptURL, locationString, srcString);
-
-                    URL locationURL = new URL(new URL(configuration.getArchivePrefix()),
-                            ((Literal)location).getLabel());
-
-                    TranscriptParser parser = new TranscriptParser(locationURL.openStream());
                     try {
-                        parser.parse();
-                    } catch (IllegalStateException ei) {
-                        System.out.println(interview.toString() + " " + transcript.toString() + " "
-                               + locationURL.toString() + " " + ei.getMessage());
-                        continue;
-                    }
+                        URL interviewURL = new URL(interview.toString());
+                        URL transcriptURL = new URL(transcript.toString());
+                        String locationString = ((Literal)location).getLabel();
+                        String srcString = ((Literal)sourceFilename).getLabel();
 
-                    System.out.println(interview.toString() + " " +
-                            transcript.toString() + " " +
-                            parser.getTitle());
-                    writeJsonTranscript(srcString, parser);
-                    writeSolrIngest(srcString, interviewURL, transcriptURL, parser);
+                        writeSummaryFile(interviewURL, transcriptURL, locationString, srcString);
+
+                        URL locationURL = new URL(new URL(configuration.getArchivePrefix()),
+                                ((Literal)location).getLabel());
+
+                        TranscriptParser parser = new TranscriptParser(locationURL.openStream());
+                        try {
+                            parser.parse();
+                        } catch (IllegalStateException ei) {
+                            System.out.println(interview.toString() + " " + transcript.toString() + " "
+                                   + locationURL.toString() + " " + ei.getMessage());
+                            continue;
+                        }
+
+                        System.out.println(interview.toString() + " " +
+                                transcript.toString() + " " +
+                                parser.getTitle());
+                        writeJsonTranscript(srcString, parser);
+                        writeSolrIngest(srcString, interviewURL, transcriptURL, parser);
+                    } catch (MalformedURLException em) {
+                        System.out.println("archivePrefix( " + configuration.getArchivePrefix() + " and location(" + location.toString() + ") not valid URL: " + em.getMessage());
+                        em.printStackTrace();
+                        continue;
+                    } catch (IOException ei) {
+                        System.out.println("IO error processing interview(" + interview.toString() + "): " + ei.getMessage());
+                        ei.printStackTrace();
+                    }
                 }
             }
+        } catch (MalformedQueryException em) {
+            em.printStackTrace();
         } catch (RepositoryException er) {
             er.printStackTrace();
         } catch (QueryEvaluationException eq) {
             eq.printStackTrace();
-        } catch (MalformedQueryException em) {
-            em.printStackTrace();
-        } catch (MalformedURLException em) {
-            em.printStackTrace();
-        } catch (IOException ei) {
-            ei.printStackTrace();
         }
     }
 
