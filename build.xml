@@ -142,6 +142,9 @@
                 <fileset dir="${build.main.java}">
                     <include name="**/*.class"/>
                 </fileset>
+                <fileset dir="${src.main.resources}">
+                    <include name="**/*"/>
+                </fileset>
             </main>
             <lib>
                 <fileset dir="${lib}">
