@@ -97,3 +97,9 @@ License: BSD 3-clause
 FILES: Compiled from source
 JARS: openrdf-sesame-2.7-SNAPSHOT-onejar.jar
 
+Project: Google Guava
+URL: http://code.google.com/p/guava-libraries/
+License: Apache 2.0
+FILES: guava-14.0.1-javadoc.jar guava-14.0.1.jar
+JARS: guava-14.0.1.jar
+
