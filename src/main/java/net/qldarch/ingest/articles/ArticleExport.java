@@ -1,6 +1,7 @@
-package net.qldarch.ingest.transcript;
+package net.qldarch.ingest.articles;
 
 import java.io.File;
+import java.io.InputStream;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.PrintWriter;
@@ -12,14 +13,24 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Scanner;
 
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.io.FileUtils;
+import org.apache.tika.metadata.Metadata;
+import org.apache.tika.parser.ParseContext;
+import org.apache.tika.parser.ParsingReader;
+import org.apache.tika.parser.pdf.PDFParser;
+import org.apache.tika.parser.rtf.RTFParser;
 import org.dom4j.Document;
 import org.dom4j.DocumentHelper;
 import org.dom4j.Element;
 import org.dom4j.io.OutputFormat;
 import org.dom4j.io.XMLWriter;
+import com.google.common.base.Function;
+import com.google.common.base.Optional;
+import com.google.common.io.CharStreams;
+import com.google.common.io.Closer;
 import org.openrdf.model.Literal;
 import org.openrdf.model.URI;
 import org.openrdf.model.Value;
@@ -43,22 +54,23 @@ public class ArticleExport implements IngestStage {
     private RepositoryConnection conn;
     private Exception initError;
 
-    public static String INTERVIEW_QUERY =
+    public static String OBJECT_WITH_FILE_QUERY =
         " prefix qldarch: <http://qldarch.net/ns/rdf/2012-06/terms#>" +
-        " select ?interview ?transcript ?tloc ?srcfile where {" + 
+        " select ?object ?title ?periodical where {" + 
         "   graph <http://qldarch.net/ns/omeka-export/2013-02-06> {" +
-        "     ?interview a qldarch:Interview ." + 
-        "     ?transcript a qldarch:Transcript ." +
-        "     ?interview qldarch:hasTranscript ?transcript ." +
+        "     ?object a qldarch:Article ." + 
+        "     ?object qldarch:hasFile _:dontcare ." +
+        "     OPTIONAL { ?object qldarch:title ?title } ." +
+        "     OPTIONAL { ?object qldarch:periodicalTitle ?periodical } ." +
         "   }" +
         " }";
 
-    public static String TRANSCRIPT_QUERY =
+    public static String FILE_FOR_OBJECT_QUERY =
         " prefix qldarch: <http://qldarch.net/ns/rdf/2012-06/terms#>" +
-        " select ?file ?tloc ?srcfile ?mimetype where {" + 
+        " select ?file ?sysloc ?srcfile ?mimetype where {" + 
         "   graph <http://qldarch.net/ns/omeka-export/2013-02-06> {" +
-        "     <%~transcript~%> qldarch:hasFile ?file ." +
-        "     ?file qldarch:systemLocation ?tloc ." +
+        "     <%~object~%> qldarch:hasFile ?file ." +
+        "     ?file qldarch:systemLocation ?sysloc ." +
         "     ?file qldarch:sourceFilename ?srcfile ." +
         "     ?file qldarch:basicMimeType ?mimetype ." +
         "   }" +
@@ -93,12 +105,20 @@ public class ArticleExport implements IngestStage {
 
         public ArchiveFile getByMimeType(String mimetype) throws ArchiveFileNotFoundException {
             for (ArchiveFile af : afs) {
-                System.out.printf("%s:%s == %s ?\n", af.fileURI.toString(), af.mimetype, mimetype);
                 if (af.mimetype.equals(mimetype)) {
                     return af;
                 }
             }
             throw new ArchiveFileNotFoundException("ArchiveFile matching " + mimetype + " not found");
+        } 
+
+        public Optional<ArchiveFile> firstByMimeType(String mimetype) throws ArchiveFileNotFoundException {
+            for (ArchiveFile af : afs) {
+                if (af.mimetype.equals(mimetype)) {
+                    return Optional.of(af);
+                }
+            }
+            return Optional.absent();
         } 
 
         public void add(ArchiveFile af) {
@@ -115,18 +135,28 @@ public class ArticleExport implements IngestStage {
             }
             return afs.get(0);
         }
+
+        public String toString() {
+            return afs.toString();
+        }
     }
 
     public ArticleExport(Configuration configuration) {
         this.configuration = configuration;
     }
 
+    public static Function<Value,String> Value_StringValue = new Function<Value,String>() {
+        public String apply(Value value) {
+            return value.stringValue();
+        }
+    };
+
     public void ingest() {
         try {
             logger.warn("Connecting to: " + configuration.getEndpoint());
             logger.warn("Repository: " + configuration.getRepository());
 
-            File output = new File(configuration.getOutputDir(), "transcripts");
+            File output = new File(configuration.getOutputDir(), "articles");
             output.mkdirs();
 
             myRepository = new HTTPRepository(configuration.getEndpoint(),
@@ -135,28 +165,31 @@ public class ArticleExport implements IngestStage {
 
             conn = myRepository.getConnection();
 
-            TupleQueryResult interviewResult = conn.prepareTupleQuery(QueryLanguage.SPARQL, INTERVIEW_QUERY).evaluate();
+            TupleQueryResult interviewResult = conn.prepareTupleQuery(QueryLanguage.SPARQL, OBJECT_WITH_FILE_QUERY).evaluate();
             while (interviewResult.hasNext()) {
                 BindingSet ibs = interviewResult.next();
-                Value interview = ibs.getValue("interview");
-                Value transcript = ibs.getValue("transcript");
+                Value object = ibs.getValue("object");
+                Value titleValue = ibs.getValue("title");
+                Value periodicalValue = ibs.getValue("periodical");
                 ArchiveFiles archiveFiles = new ArchiveFiles();
 
-                if (!(interview instanceof URI)) {
-                    System.out.println("interview(" + interview.toString() + ") not URI");
-                } else if (!(transcript instanceof URI)) {
-                    System.out.println("transcript(" + transcript.toString() + ") not URI");
+                Optional<String> title = Optional.fromNullable(titleValue).transform(Value_StringValue);
+                Optional<String> periodical = Optional.fromNullable(periodicalValue).transform(Value_StringValue);
+
+                if (!(object instanceof URI)) {
+                    System.out.println("object(" + object.toString() + ") not URI");
                 } else {
                     try {
-                        TupleQueryResult fileResult = conn.prepareTupleQuery(QueryLanguage.SPARQL, TRANSCRIPT_QUERY.replace("%~transcript~%", transcript.toString())).evaluate();
+                        String queryString = FILE_FOR_OBJECT_QUERY.replace("%~object~%", object.toString());
+                        TupleQueryResult fileResult = conn.prepareTupleQuery(QueryLanguage.SPARQL, queryString).evaluate();
                         if (!fileResult.hasNext()) {
-                            System.out.println("Error: no results found for query: " + TRANSCRIPT_QUERY.replace("%~transcript~%", transcript.toString()));
+                            System.out.println("Error: no results found for query: " + queryString);
                             continue;
                         }
                         while (fileResult.hasNext()) {
                             BindingSet fbs = fileResult.next();
                             Value file = fbs.getValue("file");
-                            Value location = fbs.getValue("tloc");
+                            Value location = fbs.getValue("sysloc");
                             Value sourceFilename = fbs.getValue("srcfile");
                             Value mimetype = fbs.getValue("mimetype");
 
@@ -179,29 +212,30 @@ public class ArticleExport implements IngestStage {
                         fileResult.close();
 
                         try {
-                            URL interviewURL = new URL(interview.toString());
-                            URL transcriptURL = new URL(transcript.toString());
+                            URL objectURL = new URL(object.toString());
 
-                            writeSummaryFile(interviewURL, transcriptURL, archiveFiles);
+                            writeSummaryFile(objectURL, title, periodical, archiveFiles);
 
-                            ArchiveFile textFile = archiveFiles.getByMimeType("text/plain");
-
-                            URL locationURL = new URL(new URL(configuration.getArchivePrefix()), textFile.location);
-
-                            TranscriptParser parser = new TranscriptParser(locationURL.openStream());
-                            try {
-                                parser.parse();
-                            } catch (IllegalStateException ei) {
-                                System.out.println(interview.toString() + " " + transcript.toString() + " "
-                                       + locationURL.toString() + " " + ei.getMessage());
+                            Optional<ArchiveFile> textFile = archiveFiles.firstByMimeType("text/plain");
+                            Optional<ArchiveFile> rtfFile = archiveFiles.firstByMimeType("text/rtf");
+                            Optional<ArchiveFile> pdfFile = archiveFiles.firstByMimeType("application/pdf");
+                            ArchiveFile sourceFile = null;
+                            String bodytext = null;
+                            if (textFile.isPresent()) {
+                                bodytext = processTextFile(objectURL, textFile.get());
+                                sourceFile = textFile.get();
+                            } else if (rtfFile.isPresent()) {
+                                bodytext = processRtfFile(objectURL, rtfFile.get());
+                                sourceFile = rtfFile.get();
+                            } else if (pdfFile.isPresent()) {
+                                bodytext = processRtfFile(objectURL, pdfFile.get());
+                                sourceFile = pdfFile.get();
+                            } else {
+                                System.out.printf("Unable to find suitable file for %s, mimetypes found: %s", objectURL, archiveFiles.toString());
                                 continue;
                             }
 
-                            System.out.println(interview.toString() + " " +
-                                    transcript.toString() + " " +
-                                    parser.getTitle());
-                            writeJsonArticle(textFile.sourceFile, parser);
-                            writeSolrIngest(textFile.sourceFile, interviewURL, transcriptURL, parser);
+                            writeSolrIngest(sourceFile, objectURL, bodytext, title, periodical);
                         } catch (MalformedURLException em) {
                             em.printStackTrace();
                         } catch (ArchiveFileNotFoundException ea) {
@@ -216,7 +250,7 @@ public class ArticleExport implements IngestStage {
                     } catch (QueryEvaluationException eq) {
                         eq.printStackTrace();
                     } catch (IOException ei) {
-                        System.out.println("IO error processing interview(" + interview.toString() + "): " + ei.getMessage());
+                        System.out.println("IO error processing article(" + object.toString() + "): " + ei.getMessage());
                         ei.printStackTrace();
                     }
                 }
@@ -231,13 +265,53 @@ public class ArticleExport implements IngestStage {
         }
     }
 
-    private void writeSummaryFile(URL interview, URL transcript, ArchiveFiles afs)
+    private String processTextFile(URL objectURL, ArchiveFile textFile) throws MalformedURLException, IOException {
+       URL locationURL = getArchiveFileURL(textFile);
+       return new Scanner(locationURL.openStream()).useDelimiter("\\A").next();
+    }
+
+    private String processRtfFile(URL objectURL, ArchiveFile rtfFile) throws MalformedURLException, IOException {
+        Closer closer = Closer.create();
+        try {
+            InputStream is = closer.register(getArchiveFileURL(rtfFile).openStream());
+            Metadata metadata = new Metadata();
+            metadata.set(Metadata.CONTENT_TYPE, rtfFile.mimetype);
+
+            ParsingReader reader = closer.register(new ParsingReader(new RTFParser(), is, metadata, new ParseContext()));
+
+            return CharStreams.toString(reader);
+        } catch (Throwable e) {
+            throw closer.rethrow(e, MalformedURLException.class);
+        } finally {
+            closer.close();
+        }
+    }
+
+    private String processPdfFile(URL objectURL, ArchiveFile pdfFile) throws MalformedURLException, IOException {
+        Closer closer = Closer.create();
+        try {
+            InputStream is = closer.register(getArchiveFileURL(pdfFile).openStream());
+            Metadata metadata = new Metadata();
+            metadata.set(Metadata.CONTENT_TYPE, pdfFile.mimetype);
+
+            ParsingReader reader = closer.register(new ParsingReader(new PDFParser(), is, metadata, new ParseContext()));
+
+            return CharStreams.toString(reader);
+        } catch (Throwable e) {
+            throw closer.rethrow(e, MalformedURLException.class);
+        } finally {
+            closer.close();
+        }
+    }
+
+    private void writeSummaryFile(URL object, Optional<String> title, Optional<String> periodical, ArchiveFiles afs)
             throws IOException, ArchiveFileNotFoundException {
         File summaryFile = new File(configuration.getOutputDir(),
                 FilenameUtils.getBaseName(afs.getFirst().sourceFile) + ".summary");
         PrintWriter pw = new PrintWriter(FileUtils.openOutputStream(summaryFile));
-        pw.printf("%s:%s\n", "interview", interview.toString());
-        pw.printf("%s:%s\n", "transcript", transcript.toString());
+        pw.printf("%s:%s\n", "article", object.toString());
+        pw.printf("%s:%s\n", "title", title.or(""));
+        pw.printf("%s:%s\n", "periodical", periodical.or(""));
         for (ArchiveFile af : afs) {
             pw.printf("file:%s:%s:%s:%s\n", af.fileURI.toString(), af.location, af.sourceFile, af.mimetype);
         }
@@ -245,23 +319,14 @@ public class ArticleExport implements IngestStage {
         pw.close();
     }
 
-    private void writeJsonArticle(String source, TranscriptParser parser) throws IOException {
-        File jsonFile = new File(configuration.getOutputDir(),
-                FilenameUtils.getBaseName(source) + ".json");
-        if (jsonFile.exists()) {
-            System.out.println("Error, " + jsonFile + " already exists");
-            return;
-        }
-        PrintStream ps = new PrintStream(FileUtils.openOutputStream(jsonFile));
-        parser.printJson(ps);
-        ps.flush();
-        ps.close();
+    private URL getArchiveFileURL(ArchiveFile archiveFile) throws MalformedURLException {
+        return new URL(new URL(configuration.getArchivePrefix()), archiveFile.location);
     }
 
-    private void writeSolrIngest(String source, URL interview, URL transcript,
-            TranscriptParser parser) throws IOException {
+    private void writeSolrIngest(ArchiveFile source, URL article, String bodytext,
+            Optional<String> title, Optional<String> periodical) throws IOException {
         File xmlFile = new File(configuration.getOutputDir(),
-                FilenameUtils.getBaseName(source) + "-solr.xml");
+                FilenameUtils.getBaseName(source.sourceFile) + "-solr.xml");
         if (xmlFile.exists()) {
             System.out.println("Error, " + xmlFile + " already exists");
             return;
@@ -272,18 +337,29 @@ public class ArticleExport implements IngestStage {
             .addAttribute("commitWithin", "30000")
             .addAttribute("overwrite", configuration.getSolrOverwrite() ? "true" : "false");
 
-        for (TranscriptParser.Utterance entry : parser.getInterview()) {
-            Element doc = root.addElement("doc");
+        Element doc = root.addElement("doc");
+        doc.addElement("field")
+            .addAttribute("name", "id")
+            .addText(article.toString());
+        doc.addElement("field")
+            .addAttribute("name", "content")
+            .addText(bodytext.toString());
+        if (title.isPresent()) {
             doc.addElement("field")
-                .addAttribute("name", "id")
-                .addText(transcript.toString() + "#" + entry.getTimestamp());
-            doc.addElement("field")
-                .addAttribute("name", "interview")
-                .addText(interview.toString());
-            doc.addElement("field")
-                .addAttribute("name", "transcript")
-                .addText(entry.getUtterance());
+                .addAttribute("name", "title")
+                .addText(title.get());
         }
+        if (title.isPresent()) {
+            doc.addElement("field")
+                .addAttribute("name", "periodical")
+                .addText(periodical.get());
+        }
+        doc.addElement("field")
+            .addAttribute("url", "system_location")
+            .addText(source.location);
+        doc.addElement("field")
+            .addAttribute("url", "original_filename")
+            .addText(source.sourceFile);
 
         XMLWriter writer = new XMLWriter(FileUtils.openOutputStream(xmlFile),
                 OutputFormat.createPrettyPrint());

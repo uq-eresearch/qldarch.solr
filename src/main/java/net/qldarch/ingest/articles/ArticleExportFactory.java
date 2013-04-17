@@ -1,4 +1,4 @@
-package net.qldarch.ingest.transcript;
+package net.qldarch.ingest.articles;
 
 import net.qldarch.ingest.Configuration;
 import net.qldarch.ingest.IngestStage;
