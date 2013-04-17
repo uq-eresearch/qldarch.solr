@@ -102,6 +102,10 @@
    <field name="time" type="text_en_splitting" indexed="true" stored="true" multiValued="false" termVectors="true" termPositions="true" termOffsets="true" />
    <field name="interview" type="text_en_splitting" indexed="true" stored="true" multiValued="false" termVectors="true" termPositions="true" termOffsets="true" />
 
+   <field name="periodical" type="text_general" indexed="true" stored="true" multiValued="false"/>
+   <field name="system_location" type="text_general" indexed="true" stored="true" multiValued="false"/>
+   <field name="original_filename" type="text_general" indexed="true" stored="true" multiValued="false"/>
+
    <!-- Common metadata fields, named specifically to match up with
      SolrCell metadata when parsing rich documents such as Word, PDF.
      Some fields are multiValued only because Tika currently may return

@@ -17,10 +17,12 @@ import org.apache.commons.lang3.StringUtils;
 
 import net.qldarch.ingest.transcript.SolrIngestFactory;
 import net.qldarch.ingest.transcript.TranscriptExportFactory;
+import net.qldarch.ingest.articles.ArticleExportFactory;
 
 public class Main {
     public static IngestStageFactory[] ingestFactories = {
         new TranscriptExportFactory(),
+        new ArticleExportFactory(),
         new SolrIngestFactory(),
     };
 
