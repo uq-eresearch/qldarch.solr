@@ -45,7 +45,7 @@ public class TranscriptExport implements IngestStage {
 
     public static String INTERVIEW_QUERY =
         " prefix qldarch: <http://qldarch.net/ns/rdf/2012-06/terms#>" +
-        " select ?interview ?transcript ?tloc ?srcfile where {" + 
+        " select ?interview ?transcript where {" + 
         "   graph <http://qldarch.net/ns/omeka-export/2013-02-06> {" +
         "     ?interview a qldarch:Interview ." + 
         "     ?transcript a qldarch:Transcript ." +
