@@ -103,3 +103,9 @@ License: Apache 2.0
 FILES: guava-14.0.1-javadoc.jar guava-14.0.1.jar
 JARS: guava-14.0.1.jar
 
+Project: Apache Tika
+URL: http://tika.apache.org/1.3/index.html
+License: Apache 2.0
+FILES: tika-app-1.3.jar
+JARS: tika-app-1.3.jar
+
