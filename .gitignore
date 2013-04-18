@@ -7,3 +7,4 @@ dist/
 generated/
 output/
 .idea
+qldarch-solr.log
