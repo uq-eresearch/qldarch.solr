@@ -1,3 +1,4 @@
+secret.properties
 .*.swp
 build/
 tags
@@ -5,3 +6,4 @@ tmp/
 dist/
 generated/
 output/
+.idea
