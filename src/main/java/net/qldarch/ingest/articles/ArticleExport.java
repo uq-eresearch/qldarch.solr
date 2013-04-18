@@ -5,9 +5,11 @@ import java.io.InputStream;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.PrintWriter;
+import java.net.UnsupportedEncodingException;
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -27,6 +29,7 @@ import org.dom4j.DocumentHelper;
 import org.dom4j.Element;
 import org.dom4j.io.OutputFormat;
 import org.dom4j.io.XMLWriter;
+import com.google.common.base.Charsets;
 import com.google.common.base.Function;
 import com.google.common.base.Optional;
 import com.google.common.io.CharStreams;
@@ -53,14 +56,16 @@ public class ArticleExport implements IngestStage {
     private Repository myRepository;
     private RepositoryConnection conn;
     private Exception initError;
+    private File outputDir;
 
     public static String OBJECT_WITH_FILE_QUERY =
         " prefix qldarch: <http://qldarch.net/ns/rdf/2012-06/terms#>" +
-        " select ?object ?title ?periodical where {" + 
+        " prefix dcterms:<http://purl.org/dc/terms/>" +
+        " select distinct ?object ?title ?periodical where {" + 
         "   graph <http://qldarch.net/ns/omeka-export/2013-02-06> {" +
         "     ?object a qldarch:Article ." + 
         "     ?object qldarch:hasFile _:dontcare ." +
-        "     OPTIONAL { ?object qldarch:title ?title } ." +
+        "     OPTIONAL { ?object dcterms:title ?title } ." +
         "     OPTIONAL { ?object qldarch:periodicalTitle ?periodical } ." +
         "   }" +
         " }";
@@ -88,10 +93,20 @@ public class ArticleExport implements IngestStage {
             this.sourceFile = sourceFile;
             this.mimetype = mimetype;
         }
+
+        public String toString() {
+            return String.format("ArchiveFile(%s, %s, %s, %s)", fileURI, location, sourceFile, mimetype);
+        }
     }
 
     public static class ArchiveFileNotFoundException extends Exception {
         public ArchiveFileNotFoundException(String message) {
+            super(message);
+        }
+    }
+
+    public static class SummaryFileExistsException extends Exception {
+        public SummaryFileExistsException(String message) {
             super(message);
         }
     }
@@ -153,11 +168,11 @@ public class ArticleExport implements IngestStage {
 
     public void ingest() {
         try {
-            logger.warn("Connecting to: " + configuration.getEndpoint());
-            logger.warn("Repository: " + configuration.getRepository());
+            logger.info("Connecting to: " + configuration.getEndpoint());
+            logger.info("Repository: " + configuration.getRepository());
 
-            File output = new File(configuration.getOutputDir(), "articles");
-            output.mkdirs();
+            outputDir = new File(configuration.getOutputDir(), "articles");
+            outputDir.mkdirs();
 
             myRepository = new HTTPRepository(configuration.getEndpoint(),
                     configuration.getRepository());
@@ -165,19 +180,23 @@ public class ArticleExport implements IngestStage {
 
             conn = myRepository.getConnection();
 
+            logger.debug("Performing query: {} ", OBJECT_WITH_FILE_QUERY);
             TupleQueryResult interviewResult = conn.prepareTupleQuery(QueryLanguage.SPARQL, OBJECT_WITH_FILE_QUERY).evaluate();
             while (interviewResult.hasNext()) {
                 BindingSet ibs = interviewResult.next();
                 Value object = ibs.getValue("object");
                 Value titleValue = ibs.getValue("title");
                 Value periodicalValue = ibs.getValue("periodical");
+
+                logger.trace("Retrieved object result: {}, {}, {}", object, titleValue, periodicalValue);
+
                 ArchiveFiles archiveFiles = new ArchiveFiles();
 
                 Optional<String> title = Optional.fromNullable(titleValue).transform(Value_StringValue);
                 Optional<String> periodical = Optional.fromNullable(periodicalValue).transform(Value_StringValue);
 
                 if (!(object instanceof URI)) {
-                    System.out.println("object(" + object.toString() + ") not URI");
+                    logger.warn("object({}) not URI", object);
                 } else {
                     try {
                         String queryString = FILE_FOR_OBJECT_QUERY.replace("%~object~%", object.toString());
@@ -231,7 +250,7 @@ public class ArticleExport implements IngestStage {
                                 bodytext = processRtfFile(objectURL, pdfFile.get());
                                 sourceFile = pdfFile.get();
                             } else {
-                                System.out.printf("Unable to find suitable file for %s, mimetypes found: %s", objectURL, archiveFiles.toString());
+                                logger.info("Unable to find suitable file for {}, mimetypes found: {}\n", objectURL, archiveFiles);
                                 continue;
                             }
 
@@ -252,6 +271,9 @@ public class ArticleExport implements IngestStage {
                     } catch (IOException ei) {
                         System.out.println("IO error processing article(" + object.toString() + "): " + ei.getMessage());
                         ei.printStackTrace();
+                    } catch (SummaryFileExistsException es) {
+                        logger.warn("Summary File {} already exists", es.getMessage());
+                        continue;
                     }
                 }
             }
@@ -304,16 +326,26 @@ public class ArticleExport implements IngestStage {
         }
     }
 
+    private String urlToFilename(URL url) {
+        try {
+            return URLEncoder.encode(url.toString(), Charsets.US_ASCII.name());
+        } catch (UnsupportedEncodingException eu) {
+            throw new IllegalStateException("US_ASCII returned unsupported", eu);
+        }
+    }
+
     private void writeSummaryFile(URL object, Optional<String> title, Optional<String> periodical, ArchiveFiles afs)
-            throws IOException, ArchiveFileNotFoundException {
-        File summaryFile = new File(configuration.getOutputDir(),
-                FilenameUtils.getBaseName(afs.getFirst().sourceFile) + ".summary");
+            throws IOException, ArchiveFileNotFoundException, SummaryFileExistsException {
+        File summaryFile = new File(outputDir, urlToFilename(object) + ".summary");
+        if (summaryFile.exists()) {
+            throw new SummaryFileExistsException(summaryFile.toString());
+        }
         PrintWriter pw = new PrintWriter(FileUtils.openOutputStream(summaryFile));
         pw.printf("%s:%s\n", "article", object.toString());
         pw.printf("%s:%s\n", "title", title.or(""));
         pw.printf("%s:%s\n", "periodical", periodical.or(""));
         for (ArchiveFile af : afs) {
-            pw.printf("file:%s:%s:%s:%s\n", af.fileURI.toString(), af.location, af.sourceFile, af.mimetype);
+            pw.printf("file: %s, %s, %s, %s\n", af.fileURI.toString(), af.location, af.sourceFile, af.mimetype);
         }
         pw.flush();
         pw.close();
@@ -325,10 +357,9 @@ public class ArticleExport implements IngestStage {
 
     private void writeSolrIngest(ArchiveFile source, URL article, String bodytext,
             Optional<String> title, Optional<String> periodical) throws IOException {
-        File xmlFile = new File(configuration.getOutputDir(),
-                FilenameUtils.getBaseName(source.sourceFile) + "-solr.xml");
+        File xmlFile = new File(outputDir, urlToFilename(article) + "-solr.xml");
         if (xmlFile.exists()) {
-            System.out.println("Error, " + xmlFile + " already exists");
+            logger.info("Error, {} already exists", xmlFile);
             return;
         }
 
