@@ -10,10 +10,15 @@ import java.util.Collection;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.filefilter.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import net.qldarch.ingest.Configuration;
 import net.qldarch.ingest.IngestStage;
 
 public class SolrIngest implements IngestStage {
+    public static Logger logger = LoggerFactory.getLogger(SolrIngest.class);
+
     private Configuration configuration;
 
     public SolrIngest(Configuration configuration) {
@@ -25,7 +30,8 @@ public class SolrIngest implements IngestStage {
         File outputDir = configuration.getOutputDir();
         Collection<File> inputFiles = FileUtils.listFiles(outputDir,
                 new SuffixFileFilter("-solr.xml"),
-                FalseFileFilter.FALSE);
+                TrueFileFilter.TRUE);
+        logger.debug("Ingesting files: {}", inputFiles);
 
         for (File inputFile : inputFiles) {
             if (!inputFile.exists()) {
@@ -45,13 +51,19 @@ public class SolrIngest implements IngestStage {
                     OutputStream out = conn.getOutputStream();
                     try {
                         FileUtils.copyFile(inputFile, out);
-                        if (conn.getResponseCode() != HttpURLConnection.HTTP_OK) {
-                            System.out.println("Solr returned " + conn.getResponseCode() + " for " +
-                                    inputFile + ", " + conn.getResponseMessage());
+                        // Note: This kludge is the 'official' workaround from Sun.
+                        // http://bugs.sun.com/bugdatabase/view_bug.do?bug_id=4513568
+                        InputStream in;
+                        if (conn.getResponseCode() < 400) {
+                            in = conn.getInputStream();
+                        } else {
+                            logger.warn("Solr returned {} for {}, {}",
+                                    conn.getResponseCode(), inputFile, conn.getResponseMessage());
+                            in = conn.getErrorStream();
                         }
 
-                        InputStream in = conn.getInputStream();
                         try {
+                            logger.debug("Writing result to {}", resultFile);
                             FileUtils.copyInputStreamToFile(in, resultFile);
                         } finally {
                             if (in != null) in.close();
