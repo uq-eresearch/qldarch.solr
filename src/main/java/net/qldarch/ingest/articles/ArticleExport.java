@@ -247,7 +247,7 @@ public class ArticleExport implements IngestStage {
                                 bodytext = processRtfFile(objectURL, rtfFile.get());
                                 sourceFile = rtfFile.get();
                             } else if (pdfFile.isPresent()) {
-                                bodytext = processRtfFile(objectURL, pdfFile.get());
+                                bodytext = processPdfFile(objectURL, pdfFile.get());
                                 sourceFile = pdfFile.get();
                             } else {
                                 logger.info("Unable to find suitable file for {}, mimetypes found: {}\n", objectURL, archiveFiles);
@@ -310,6 +310,7 @@ public class ArticleExport implements IngestStage {
     }
 
     private String processPdfFile(URL objectURL, ArchiveFile pdfFile) throws MalformedURLException, IOException {
+        logger.debug("Processing {} using {}", objectURL, pdfFile);
         Closer closer = Closer.create();
         try {
             InputStream is = closer.register(getArchiveFileURL(pdfFile).openStream());
@@ -318,12 +319,18 @@ public class ArticleExport implements IngestStage {
 
             ParsingReader reader = closer.register(new ParsingReader(new PDFParser(), is, metadata, new ParseContext()));
 
-            return CharStreams.toString(reader);
+            String result = CharStreams.toString(reader);
+            logger.debug("Processing of {} returned {}", objectURL, truncate(result, 20));
+            return result;
         } catch (Throwable e) {
             throw closer.rethrow(e, MalformedURLException.class);
         } finally {
             closer.close();
         }
+    }
+
+    private static String truncate(String str, int len) {
+        return str.length() > len ? str.substring(0, len) : str;
     }
 
     private String urlToFilename(URL url) {
@@ -386,10 +393,10 @@ public class ArticleExport implements IngestStage {
                 .addText(periodical.get());
         }
         doc.addElement("field")
-            .addAttribute("url", "system_location")
+            .addAttribute("name", "system_location")
             .addText(source.location);
         doc.addElement("field")
-            .addAttribute("url", "original_filename")
+            .addAttribute("name", "original_filename")
             .addText(source.sourceFile);
 
         XMLWriter writer = new XMLWriter(FileUtils.openOutputStream(xmlFile),
