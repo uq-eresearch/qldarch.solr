@@ -98,10 +98,12 @@
    -->
         
    <field name="id" type="string" indexed="true" stored="true" required="true" multiValued="false" /> 
+
    <field name="transcript" type="text_en_splitting" indexed="true" stored="true" multiValued="false" termVectors="true" termPositions="true" termOffsets="true" />
    <field name="time" type="text_en_splitting" indexed="true" stored="true" multiValued="false" termVectors="true" termPositions="true" termOffsets="true" />
    <field name="interview" type="text_en_splitting" indexed="true" stored="true" multiValued="false" termVectors="true" termPositions="true" termOffsets="true" />
 
+   <field name="article" type="text_en_splitting" indexed="true" stored="true" multiValued="false" termVectors="true" termPositions="true" termOffsets="true" />
    <field name="periodical" type="text_general" indexed="true" stored="true" multiValued="false"/>
    <field name="system_location" type="text_general" indexed="true" stored="true" multiValued="false"/>
    <field name="original_filename" type="text_general" indexed="true" stored="true" multiValued="false"/>
@@ -126,6 +128,7 @@
    <field name="content_type" type="string" indexed="true" stored="true" multiValued="true"/>
    <field name="last_modified" type="date" indexed="true" stored="true"/>
    <field name="links" type="string" indexed="true" stored="true" multiValued="true"/>
+
 
    <!-- Main body of document extracted by SolrCell.
         NOTE: This field is not indexed by default, since it is also copied to "text"
@@ -233,6 +236,7 @@
         or to add multiple fields to the same field for easier/faster searching.  -->
 
    <copyField source="transcript" dest="text"/>
+   <copyField source="article" dest="text"/>
 
    <!-- Text fields from SolrCell to search by default in our catch-all field -->
    <copyField source="title" dest="text"/>

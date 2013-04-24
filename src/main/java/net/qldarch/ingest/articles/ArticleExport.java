@@ -380,7 +380,7 @@ public class ArticleExport implements IngestStage {
             .addAttribute("name", "id")
             .addText(article.toString());
         doc.addElement("field")
-            .addAttribute("name", "content")
+            .addAttribute("name", "article")
             .addText(bodytext.toString());
         if (title.isPresent()) {
             doc.addElement("field")
