@@ -7,10 +7,7 @@ import java.io.PrintWriter;
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
 import java.net.URL;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.io.FilenameUtils;
@@ -32,6 +29,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import net.qldarch.av.parser.TranscriptParser;
+import net.qldarch.ingest.archive.ArchiveFile;
+import net.qldarch.ingest.archive.ArchiveFileNotFoundException;
+import net.qldarch.ingest.archive.ArchiveFiles;
 import net.qldarch.ingest.Configuration;
 import net.qldarch.ingest.IngestStage;
 
@@ -63,59 +63,6 @@ public class TranscriptExport implements IngestStage {
         "     ?file qldarch:basicMimeType ?mimetype ." +
         "   }" +
         " }";
-
-    public static class ArchiveFile {
-        public final java.net.URI fileURI;
-        public final String location;
-        public final String sourceFile;
-        public final String mimetype;
-
-        public ArchiveFile(java.net.URI fileURI, String location, String sourceFile, String mimetype) {
-            this.fileURI = fileURI;
-            this.location = location;
-            this.sourceFile = sourceFile;
-            this.mimetype = mimetype;
-        }
-    }
-
-    public static class ArchiveFileNotFoundException extends Exception {
-        public ArchiveFileNotFoundException(String message) {
-            super(message);
-        }
-    }
-
-    public static class ArchiveFiles implements Iterable<ArchiveFile> {
-        private List<ArchiveFile> afs;
-
-        public ArchiveFiles() {
-            afs = new ArrayList<ArchiveFile>();
-        }
-
-        public ArchiveFile getByMimeType(String mimetype) throws ArchiveFileNotFoundException {
-            for (ArchiveFile af : afs) {
-                System.out.printf("%s:%s == %s ?\n", af.fileURI.toString(), af.mimetype, mimetype);
-                if (af.mimetype.equals(mimetype)) {
-                    return af;
-                }
-            }
-            throw new ArchiveFileNotFoundException("ArchiveFile matching " + mimetype + " not found");
-        } 
-
-        public void add(ArchiveFile af) {
-            afs.add(af);
-        }
-
-        public Iterator<ArchiveFile> iterator() {
-            return afs.iterator();
-        }
-
-        public ArchiveFile getFirst() throws ArchiveFileNotFoundException {
-            if (afs.size() == 0) {
-                throw new ArchiveFileNotFoundException("No ArchiveFile available");
-            }
-            return afs.get(0);
-        }
-    }
 
     public TranscriptExport(Configuration configuration) {
         this.configuration = configuration;
@@ -184,7 +131,12 @@ public class TranscriptExport implements IngestStage {
 
                             writeSummaryFile(interviewURL, transcriptURL, archiveFiles);
 
-                            ArchiveFile textFile = archiveFiles.getByMimeType("text/plain");
+                            Optional<ArchiveFile> jsonFile =
+                                archiveFiles.firstByMimeType("application/json");
+                            Optional<ArchiveFile> textFile =
+                                archiveFiles.firstByMimeType("text/plain");
+                            Optional<ArchiveFile> docFile =
+                                archiveFiles.firstByMimeType("application/msword");
 
                             URL locationURL = new URL(new URL(configuration.getArchivePrefix()), textFile.location);
 
