@@ -1,9 +1,7 @@
 package net.qldarch.ingest.articles;
 
 import java.io.File;
-import java.io.InputStream;
 import java.io.IOException;
-import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
@@ -12,15 +10,9 @@ import java.net.URL;
 import java.net.URLEncoder;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Scanner;
 
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.io.FileUtils;
-import org.apache.tika.metadata.Metadata;
-import org.apache.tika.parser.ParseContext;
-import org.apache.tika.parser.ParsingReader;
-import org.apache.tika.parser.pdf.PDFParser;
-import org.apache.tika.parser.rtf.RTFParser;
 import org.dom4j.Document;
 import org.dom4j.DocumentHelper;
 import org.dom4j.Element;
@@ -29,8 +21,6 @@ import org.dom4j.io.XMLWriter;
 import com.google.common.base.Charsets;
 import com.google.common.base.Function;
 import com.google.common.base.Optional;
-import com.google.common.io.CharStreams;
-import com.google.common.io.Closer;
 import org.openrdf.model.Literal;
 import org.openrdf.model.URI;
 import org.openrdf.model.Value;
@@ -39,6 +29,7 @@ import org.openrdf.repository.Repository;
 import org.openrdf.repository.RepositoryConnection;
 import org.openrdf.repository.RepositoryException;
 import org.openrdf.repository.http.HTTPRepository;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,12 +52,12 @@ public class ArticleExport implements IngestStage {
     public static String OBJECT_WITH_FILE_QUERY =
         " prefix qldarch: <http://qldarch.net/ns/rdf/2012-06/terms#>" +
         " prefix dcterms:<http://purl.org/dc/terms/>" +
-        " select distinct ?object ?title ?periodical where {" + 
+        " select distinct ?item ?title ?periodical where {" + 
         "   graph <http://qldarch.net/ns/omeka-export/2013-02-06> {" +
-        "     ?object a qldarch:Article ." + 
-        "     ?object qldarch:hasFile _:dontcare ." +
-        "     OPTIONAL { ?object dcterms:title ?title } ." +
-        "     OPTIONAL { ?object qldarch:periodicalTitle ?periodical } ." +
+        "     ?item a qldarch:Article ." + 
+        "     ?item qldarch:hasFile _:dontcare ." +
+        "     OPTIONAL { ?item dcterms:title ?title } ." +
+        "     OPTIONAL { ?item qldarch:periodicalTitle ?periodical } ." +
         "   }" +
         " }";
 
@@ -74,7 +65,7 @@ public class ArticleExport implements IngestStage {
         " prefix qldarch: <http://qldarch.net/ns/rdf/2012-06/terms#>" +
         " select ?file ?sysloc ?srcfile ?mimetype where {" + 
         "   graph <http://qldarch.net/ns/omeka-export/2013-02-06> {" +
-        "     <%~object~%> qldarch:hasFile ?file ." +
+        "     <%~item~%> qldarch:hasFile ?file ." +
         "     ?file qldarch:systemLocation ?sysloc ." +
         "     ?file qldarch:sourceFilename ?srcfile ." +
         "     ?file qldarch:basicMimeType ?mimetype ." +
@@ -115,22 +106,22 @@ public class ArticleExport implements IngestStage {
             TupleQueryResult interviewResult = conn.prepareTupleQuery(QueryLanguage.SPARQL, OBJECT_WITH_FILE_QUERY).evaluate();
             while (interviewResult.hasNext()) {
                 BindingSet ibs = interviewResult.next();
-                Value object = ibs.getValue("object");
+                Value item = ibs.getValue("item");
                 Value titleValue = ibs.getValue("title");
                 Value periodicalValue = ibs.getValue("periodical");
 
-                logger.trace("Retrieved object result: {}, {}, {}", object, titleValue, periodicalValue);
+                logger.trace("Retrieved item result: {}, {}, {}", item, titleValue, periodicalValue);
 
                 ArchiveFiles archiveFiles = new ArchiveFiles();
 
                 Optional<String> title = Optional.fromNullable(titleValue).transform(Value_StringValue);
                 Optional<String> periodical = Optional.fromNullable(periodicalValue).transform(Value_StringValue);
 
-                if (!(object instanceof URI)) {
-                    logger.warn("object({}) not URI", object);
+                if (!(item instanceof URI)) {
+                    logger.warn("item({}) not URI", item);
                 } else {
                     try {
-                        String queryString = FILE_FOR_OBJECT_QUERY.replace("%~object~%", object.toString());
+                        String queryString = FILE_FOR_OBJECT_QUERY.replace("%~item~%", item.toString());
                         TupleQueryResult fileResult = conn.prepareTupleQuery(QueryLanguage.SPARQL, queryString).evaluate();
                         if (!fileResult.hasNext()) {
                             System.out.println("Error: no results found for query: " + queryString);
@@ -154,6 +145,7 @@ public class ArticleExport implements IngestStage {
                             }
 
                             archiveFiles.add(new ArchiveFile(
+                                item.toString(),
                                 new java.net.URI(file.toString()),
                                 ((Literal)location).getLabel(),
                                 ((Literal)sourceFilename).getLabel(),
@@ -162,33 +154,26 @@ public class ArticleExport implements IngestStage {
                         fileResult.close();
 
                         try {
-                            URL objectURL = new URL(object.toString());
+                            URL itemURL = new URL(item.toString());
 
-                            writeSummaryFile(objectURL, title, periodical, archiveFiles);
+                            writeSummaryFile(itemURL, title, periodical, archiveFiles);
 
-                            Optional<ArchiveFile> textFile =
-                                archiveFiles.firstByMimeType("text/plain");
-                            Optional<ArchiveFile> rtfFile =
-                                archiveFiles.firstByMimeType("text/rtf");
-                            Optional<ArchiveFile> pdfFile =
-                                archiveFiles.firstByMimeType("application/pdf");
+                            Optional<ArchiveFile> file =
+                                archiveFiles.firstByMimeType("text/plain").or(
+                                archiveFiles.firstByMimeType("text/rtf")).or(
+                                archiveFiles.firstByMimeType("application/pdf"));
+
                             ArchiveFile sourceFile = null;
                             String bodytext = null;
-                            if (textFile.isPresent()) {
-                                bodytext = processTextFile(objectURL, textFile.get());
-                                sourceFile = textFile.get();
-                            } else if (rtfFile.isPresent()) {
-                                bodytext = processRtfFile(objectURL, rtfFile.get());
-                                sourceFile = rtfFile.get();
-                            } else if (pdfFile.isPresent()) {
-                                bodytext = processPdfFile(objectURL, pdfFile.get());
-                                sourceFile = pdfFile.get();
+                            if (file.isPresent()) {
+                                sourceFile = file.get();
+                                bodytext = sourceFile.toText(configuration.getArchivePrefix());
                             } else {
-                                logger.info("Unable to find suitable file for {}, mimetypes found: {}\n", objectURL, archiveFiles);
+                                logger.info("Unable to find suitable file for {}, files found: {}\n", itemURL, archiveFiles);
                                 continue;
                             }
 
-                            writeSolrIngest(sourceFile, objectURL, bodytext, title, periodical);
+                            writeSolrIngest(sourceFile, itemURL, bodytext, title, periodical);
                         } catch (MalformedURLException em) {
                             em.printStackTrace();
                         } catch (ArchiveFileNotFoundException ea) {
@@ -203,7 +188,7 @@ public class ArticleExport implements IngestStage {
                     } catch (QueryEvaluationException eq) {
                         eq.printStackTrace();
                     } catch (IOException ei) {
-                        System.out.println("IO error processing article(" + object.toString() + "): " + ei.getMessage());
+                        System.out.println("IO error processing article(" + item.toString() + "): " + ei.getMessage());
                         ei.printStackTrace();
                     } catch (SummaryFileExistsException es) {
                         logger.warn("Summary File {} already exists", es.getMessage());
@@ -221,52 +206,6 @@ public class ArticleExport implements IngestStage {
         }
     }
 
-    private String processTextFile(URL objectURL, ArchiveFile textFile) throws MalformedURLException, IOException {
-       URL locationURL = getArchiveFileURL(textFile);
-       return new Scanner(locationURL.openStream()).useDelimiter("\\A").next();
-    }
-
-    private String processRtfFile(URL objectURL, ArchiveFile rtfFile) throws MalformedURLException, IOException {
-        Closer closer = Closer.create();
-        try {
-            InputStream is = closer.register(getArchiveFileURL(rtfFile).openStream());
-            Metadata metadata = new Metadata();
-            metadata.set(Metadata.CONTENT_TYPE, rtfFile.mimetype);
-
-            ParsingReader reader = closer.register(new ParsingReader(new RTFParser(), is, metadata, new ParseContext()));
-
-            return CharStreams.toString(reader);
-        } catch (Throwable e) {
-            throw closer.rethrow(e, MalformedURLException.class);
-        } finally {
-            closer.close();
-        }
-    }
-
-    private String processPdfFile(URL objectURL, ArchiveFile pdfFile) throws MalformedURLException, IOException {
-        logger.debug("Processing {} using {}", objectURL, pdfFile);
-        Closer closer = Closer.create();
-        try {
-            InputStream is = closer.register(getArchiveFileURL(pdfFile).openStream());
-            Metadata metadata = new Metadata();
-            metadata.set(Metadata.CONTENT_TYPE, pdfFile.mimetype);
-
-            ParsingReader reader = closer.register(new ParsingReader(new PDFParser(), is, metadata, new ParseContext()));
-
-            String result = CharStreams.toString(reader);
-            logger.debug("Processing of {} returned {}", objectURL, truncate(result, 20));
-            return result;
-        } catch (Throwable e) {
-            throw closer.rethrow(e, MalformedURLException.class);
-        } finally {
-            closer.close();
-        }
-    }
-
-    private static String truncate(String str, int len) {
-        return str.length() > len ? str.substring(0, len) : str;
-    }
-
     private String urlToFilename(URL url) {
         try {
             return URLEncoder.encode(url.toString(), Charsets.US_ASCII.name());
@@ -275,14 +214,14 @@ public class ArticleExport implements IngestStage {
         }
     }
 
-    private void writeSummaryFile(URL object, Optional<String> title, Optional<String> periodical, ArchiveFiles afs)
+    private void writeSummaryFile(URL item, Optional<String> title, Optional<String> periodical, ArchiveFiles afs)
             throws IOException, ArchiveFileNotFoundException, SummaryFileExistsException {
-        File summaryFile = new File(outputDir, urlToFilename(object) + ".summary");
+        File summaryFile = new File(outputDir, urlToFilename(item) + ".summary");
         if (summaryFile.exists()) {
             throw new SummaryFileExistsException(summaryFile.toString());
         }
         PrintWriter pw = new PrintWriter(FileUtils.openOutputStream(summaryFile));
-        pw.printf("%s:%s\n", "article", object.toString());
+        pw.printf("%s:%s\n", "article", item.toString());
         pw.printf("%s:%s\n", "title", title.or(""));
         pw.printf("%s:%s\n", "periodical", periodical.or(""));
         for (ArchiveFile af : afs) {
@@ -290,10 +229,6 @@ public class ArticleExport implements IngestStage {
         }
         pw.flush();
         pw.close();
-    }
-
-    private URL getArchiveFileURL(ArchiveFile archiveFile) throws MalformedURLException {
-        return new URL(new URL(configuration.getArchivePrefix()), archiveFile.location);
     }
 
     private void writeSolrIngest(ArchiveFile source, URL article, String bodytext,

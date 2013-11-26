@@ -116,8 +116,8 @@ public class Main {
                 .create("s"));
         options.addOption(OptionBuilder
                 .withLongOpt("solroverwrite")
-                .withDescription("Generate solr update files to overwrite preexisting entries" +
-                    Configuration.DEFAULT_SOLR_URL)
+                .withDescription("Have the transcript/article stage generate solr update files " +
+                    "to overwrite preexisting entries.")
                 .hasArg(false)
                 .create());
 

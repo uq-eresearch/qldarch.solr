@@ -10,6 +10,7 @@ import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.google.common.base.Optional;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.io.FileUtils;
 import org.dom4j.Document;
@@ -118,6 +119,7 @@ public class TranscriptExport implements IngestStage {
                             }
 
                             archiveFiles.add(new ArchiveFile(
+                                transcript.toString(),
                                 new java.net.URI(file.toString()),
                                 ((Literal)location).getLabel(),
                                 ((Literal)sourceFilename).getLabel(),
@@ -131,29 +133,41 @@ public class TranscriptExport implements IngestStage {
 
                             writeSummaryFile(interviewURL, transcriptURL, archiveFiles);
 
-                            Optional<ArchiveFile> jsonFile =
-                                archiveFiles.firstByMimeType("application/json");
                             Optional<ArchiveFile> textFile =
-                                archiveFiles.firstByMimeType("text/plain");
-                            Optional<ArchiveFile> docFile =
-                                archiveFiles.firstByMimeType("application/msword");
+                                archiveFiles.firstByMimeType("text/plain").or(
+                                archiveFiles.firstByMimeType("text/rtf")).or(
+                                archiveFiles.firstByMimeType("application/msword"));
 
-                            URL locationURL = new URL(new URL(configuration.getArchivePrefix()), textFile.location);
-
-                            TranscriptParser parser = new TranscriptParser(locationURL.openStream());
-                            try {
-                                parser.parse();
-                            } catch (IllegalStateException ei) {
-                                System.out.println(interview.toString() + " " + transcript.toString() + " "
-                                       + locationURL.toString() + " " + ei.getMessage());
+                            TranscriptParser parser;
+                            if (textFile.isPresent()) {
+                                parser = new TranscriptParser(
+                                        textFile.get().toReader(configuration.getArchivePrefix()));
+                            } else {
+                                System.out.println(
+                                        "No suitable file found for transcript " +
+                                        transcript + " among " + archiveFiles);
                                 continue;
                             }
 
-                            System.out.println(interview.toString() + " " +
+                            try {
+                                parser.parse();
+                            } catch (IllegalStateException ei) {
+                                System.out.println(interview.toString() + " " +
+                                       transcript.toString() + " " +
+                                       ei.getMessage());
+                                continue;
+                            }
+
+                            System.out.println(
+                                    interview.toString() + " " +
                                     transcript.toString() + " " +
                                     parser.getTitle());
-                            writeJsonTranscript(textFile.sourceFile, parser);
-                            writeSolrIngest(textFile.sourceFile, interviewURL, transcriptURL, parser);
+
+                            writeJsonTranscript(textFile.get().sourceFile, parser);
+
+                            writeSolrIngest(textFile.get().sourceFile, interviewURL,
+                                    transcriptURL, parser);
+
                         } catch (MalformedURLException em) {
                             em.printStackTrace();
                         } catch (ArchiveFileNotFoundException ea) {
