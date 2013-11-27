@@ -2,13 +2,16 @@ package net.qldarch.ingest.transcript;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 
 import com.google.common.base.Optional;
 import org.apache.commons.io.FilenameUtils;
@@ -131,43 +134,47 @@ public class TranscriptExport implements IngestStage {
                             URL interviewURL = new URL(interview.toString());
                             URL transcriptURL = new URL(transcript.toString());
 
-                            writeSummaryFile(interviewURL, transcriptURL, archiveFiles);
-
-                            Optional<ArchiveFile> textFile =
-                                archiveFiles.firstByMimeType("text/plain").or(
-                                archiveFiles.firstByMimeType("text/rtf")).or(
-                                archiveFiles.firstByMimeType("application/msword"));
-
-                            TranscriptParser parser;
-                            if (textFile.isPresent()) {
-                                parser = new TranscriptParser(
-                                        textFile.get().toReader(configuration.getArchivePrefix()));
-                            } else {
-                                System.out.println(
-                                        "No suitable file found for transcript " +
-                                        transcript + " among " + archiveFiles);
-                                continue;
-                            }
+                            Properties summary =
+                                prepareSummary(interviewURL, transcriptURL, archiveFiles);
 
                             try {
-                                parser.parse();
-                            } catch (IllegalStateException ei) {
-                                System.out.println(interview.toString() + " " +
-                                       transcript.toString() + " " +
-                                       ei.getMessage());
-                                continue;
+                                Optional<ArchiveFile> textFile =
+                                    archiveFiles.firstByMimeType("text/plain").or(
+                                    archiveFiles.firstByMimeType("text/rtf")).or(
+                                    archiveFiles.firstByMimeType("application/msword"));
+
+                                TranscriptParser parser;
+                                if (textFile.isPresent()) {
+                                    parser = new TranscriptParser(
+                                            textFile.get().toReader(configuration.getArchivePrefix()));
+                                } else {
+                                    System.out.println(
+                                            "No suitable file found for transcript " +
+                                            transcript + " among " + archiveFiles);
+                                    continue;
+                                }
+
+                                try {
+                                    parser.parse();
+                                } catch (IllegalStateException ei) {
+                                    System.out.println(interview.toString() + " " +
+                                           transcript.toString() + " " +
+                                           ei.getMessage());
+                                    continue;
+                                }
+
+                                System.out.println(
+                                        interview.toString() + " " +
+                                        transcript.toString() + " " +
+                                        parser.getTitle());
+
+                                writeJsonTranscript(textFile.get().sourceFile, parser, summary);
+
+                                writeSolrIngest(textFile.get().sourceFile, interviewURL,
+                                        transcriptURL, parser, summary);
+                            } finally {
+                                writeSummaryFile(archiveFiles, summary);
                             }
-
-                            System.out.println(
-                                    interview.toString() + " " +
-                                    transcript.toString() + " " +
-                                    parser.getTitle());
-
-                            writeJsonTranscript(textFile.get().sourceFile, parser);
-
-                            writeSolrIngest(textFile.get().sourceFile, interviewURL,
-                                    transcriptURL, parser);
-
                         } catch (MalformedURLException em) {
                             em.printStackTrace();
                         } catch (ArchiveFileNotFoundException ea) {
@@ -197,24 +204,36 @@ public class TranscriptExport implements IngestStage {
         }
     }
 
-    private void writeSummaryFile(URL interview, URL transcript, ArchiveFiles afs)
-            throws IOException, ArchiveFileNotFoundException {
-        File summaryFile = new File(configuration.getOutputDir(),
-                FilenameUtils.getBaseName(afs.getFirst().sourceFile) + ".summary");
-        PrintWriter pw = new PrintWriter(FileUtils.openOutputStream(summaryFile));
-        pw.printf("%s:%s\n", "interview", interview.toString());
-        pw.printf("%s:%s\n", "transcript", transcript.toString());
+    private Properties prepareSummary(URL interview, URL transcript, ArchiveFiles afs) {
+        Properties summary = new Properties();
+        summary.setProperty("interview", interview.toString());
+        summary.setProperty("transcript", transcript.toString());
+        int i = 0;
         for (ArchiveFile af : afs) {
-            pw.printf("file:%s:%s:%s:%s\n", af.fileURI.toString(), af.location, af.sourceFile, af.mimetype);
+            summary.setProperty(
+                    String.format("%s.%d", "file", i++),
+                    String.format("%s, %s, %s, %s", af.fileURI.toString(), af.location,
+                        af.sourceFile, af.mimetype));
         }
-        pw.flush();
-        pw.close();
+
+        return summary;
     }
 
-    private void writeJsonTranscript(String source, TranscriptParser parser) throws IOException {
+    private void writeSummaryFile(ArchiveFiles afs, Properties summary) throws IOException, ArchiveFileNotFoundException {
+        File summaryFile = new File(configuration.getOutputDir(),
+                FilenameUtils.getBaseName(afs.getFirst().sourceFile) + ".summary");
+        OutputStream os = FileUtils.openOutputStream(summaryFile);
+        summary.store(os, new Date().toString());
+        os.flush();
+        os.close();
+    }
+
+    private void writeJsonTranscript(String source, TranscriptParser parser, Properties summary)
+            throws IOException {
         File jsonFile = new File(configuration.getOutputDir(),
                 FilenameUtils.getBaseName(source) + ".json");
         if (jsonFile.exists()) {
+            summary.setProperty("json", jsonFile.getAbsoluteFile().toString());
             System.out.println("Error, " + jsonFile + " already exists");
             return;
         }
@@ -222,13 +241,15 @@ public class TranscriptExport implements IngestStage {
         parser.printJson(ps);
         ps.flush();
         ps.close();
+        summary.setProperty("json", jsonFile.getAbsoluteFile().toString());
     }
 
     private void writeSolrIngest(String source, URL interview, URL transcript,
-            TranscriptParser parser) throws IOException {
+            TranscriptParser parser, Properties summary) throws IOException {
         File xmlFile = new File(configuration.getOutputDir(),
                 FilenameUtils.getBaseName(source) + "-solr.xml");
         if (xmlFile.exists()) {
+            summary.setProperty("solr", xmlFile.getAbsoluteFile().toString());
             System.out.println("Error, " + xmlFile + " already exists");
             return;
         }
@@ -255,5 +276,6 @@ public class TranscriptExport implements IngestStage {
                 OutputFormat.createPrettyPrint());
         writer.write(document);
         writer.close();
+        summary.setProperty("solr", xmlFile.getAbsoluteFile().toString());
     }
 }
