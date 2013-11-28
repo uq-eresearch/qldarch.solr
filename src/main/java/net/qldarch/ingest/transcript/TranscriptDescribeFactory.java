@@ -6,7 +6,7 @@ import net.qldarch.ingest.IngestStageFactory;
 
 public class TranscriptDescribeFactory implements IngestStageFactory<TranscriptDescribe> {
     public String getStageName() {
-        return "deploy";
+        return "describe";
     }
 
     public TranscriptDescribe createIngestStage(Configuration configuration) {
