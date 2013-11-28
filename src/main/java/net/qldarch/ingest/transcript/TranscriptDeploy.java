@@ -89,7 +89,8 @@ public class TranscriptDeploy implements IngestStage {
 
         try {
             Files.copy(inputFile.toPath(), destFile.toPath(), REPLACE_EXISTING);
-            summary.setProperty("deploy.file", destFile.getAbsoluteFile().toString());
+            summary.setProperty("deploy.file",
+                    destFile.getAbsoluteFile().getCanonicalFile().toString());
         } catch (IOException ei) {
             String msg = String.format("Failed to deploy file: %s", inputFile);
             System.out.println(msg + ": " +  ei.getMessage());

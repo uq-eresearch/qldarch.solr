@@ -75,7 +75,8 @@ public class SolrIngest implements IngestStage {
             return;
         }
 
-        summary.setProperty("solr.result", resultFile.getAbsoluteFile().toString());
+        summary.setProperty("solr.result",
+                resultFile.getAbsoluteFile().getCanonicalFile().toString());
 
         try {
             submitSolrFile(solrURL, inputFile, resultFile, summary);

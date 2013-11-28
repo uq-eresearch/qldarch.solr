@@ -233,7 +233,7 @@ public class TranscriptExport implements IngestStage {
         File jsonFile = new File(configuration.getOutputDir(),
                 FilenameUtils.getBaseName(source) + ".json");
         if (jsonFile.exists()) {
-            summary.setProperty("json", jsonFile.getAbsoluteFile().toString());
+            summary.setProperty("json", jsonFile.getAbsoluteFile().getCanonicalFile().toString());
             System.out.println("Error, " + jsonFile + " already exists");
             return;
         }
@@ -241,7 +241,7 @@ public class TranscriptExport implements IngestStage {
         parser.printJson(ps);
         ps.flush();
         ps.close();
-        summary.setProperty("json", jsonFile.getAbsoluteFile().toString());
+        summary.setProperty("json", jsonFile.getAbsoluteFile().getCanonicalFile().toString());
     }
 
     private void writeSolrIngest(String source, URL interview, URL transcript,
@@ -249,7 +249,8 @@ public class TranscriptExport implements IngestStage {
         File xmlFile = new File(configuration.getOutputDir(),
                 FilenameUtils.getBaseName(source) + "-solr.xml");
         if (xmlFile.exists()) {
-            summary.setProperty("solr.input", xmlFile.getAbsoluteFile().toString());
+            summary.setProperty("solr.input",
+                    xmlFile.getAbsoluteFile().getCanonicalFile().toString());
             System.out.println("Error, " + xmlFile + " already exists");
             return;
         }
@@ -276,6 +277,6 @@ public class TranscriptExport implements IngestStage {
                 OutputFormat.createPrettyPrint());
         writer.write(document);
         writer.close();
-        summary.setProperty("solr", xmlFile.getAbsoluteFile().toString());
+        summary.setProperty("solr", xmlFile.getAbsoluteFile().getCanonicalFile().toString());
     }
 }
