@@ -17,6 +17,7 @@ public class Configuration {
     public static String DEFAULT_SOLR_URL = "http://localhost:8080/solr/update";
     public static String DEFAULT_WEB_BASE = "/var/www/html";
     public static String DEFAULT_JSON_PATH = "static/transcripts/json";
+    public static String DEFAULT_JSON_URL_PREFIX = "http://qldarch.net/";
 
     private File outputdir;
     private List<String> stages;
@@ -28,6 +29,7 @@ public class Configuration {
     private File webBase;
     private File jsonPath;
     private boolean forceDeploy;
+    private URL jsonURLPrefix;
 
     public Configuration(CommandLine commandLine, Set<String> validStages)
             throws ConfigurationException {
@@ -42,6 +44,8 @@ public class Configuration {
             this.webBase = new File(fetchWithDefault(commandLine, "webbase", DEFAULT_WEB_BASE));
             this.jsonPath = new File(fetchWithDefault(commandLine, "jsonpath", DEFAULT_JSON_PATH));
             this.forceDeploy = commandLine.hasOption("forcedeploy");
+            this.jsonURLPrefix = new URL(
+                    fetchWithDefault(commandLine, "jsonurlprefix", DEFAULT_JSON_URL_PREFIX));
 
             validateStages(stages, validStages);
         } catch (Exception e) {
@@ -62,6 +66,7 @@ public class Configuration {
     public File getWebBase() { return webBase; }
     public File getJsonPath() { return jsonPath; }
     public boolean getForceDeploy() { return forceDeploy; }
+    public URL getJsonURLPrefix() { return jsonURLPrefix; }
 
     public static String fetchWithDefault(CommandLine commandLine, String option, String defult) {
         if (commandLine.hasOption(option)) {

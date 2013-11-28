@@ -74,9 +74,10 @@ public class TranscriptDeploy implements IngestStage {
             return;
         }
 
-        File destFile = webBase.toPath()
-            .resolve(jsonPath.toPath())
-            .resolve(inputFile.getName().replace(" ", "_")).toFile();
+        Path destPath = jsonPath.toPath().resolve(inputFile.getName().replace(" ", "_"));
+
+        File destFile = webBase.toPath().resolve(destPath).toFile();
+
 
         if (destFile.exists()) {
             if (force) {
@@ -89,6 +90,7 @@ public class TranscriptDeploy implements IngestStage {
 
         try {
             Files.copy(inputFile.toPath(), destFile.toPath(), REPLACE_EXISTING);
+            summary.setProperty("json.path", destPath.toString());
             summary.setProperty("deploy.file",
                     destFile.getAbsoluteFile().getCanonicalFile().toString());
         } catch (IOException ei) {

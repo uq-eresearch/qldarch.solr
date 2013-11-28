@@ -17,15 +17,17 @@ import org.apache.commons.lang3.StringUtils;
 
 import net.qldarch.ingest.transcript.SolrIngestFactory;
 import net.qldarch.ingest.transcript.TranscriptDeployFactory;
+import net.qldarch.ingest.transcript.TranscriptDescribeFactory;
 import net.qldarch.ingest.transcript.TranscriptExportFactory;
 import net.qldarch.ingest.articles.ArticleExportFactory;
 
 public class Main {
     public static IngestStageFactory[] ingestFactories = {
-        new TranscriptExportFactory(),
         new ArticleExportFactory(),
-        new SolrIngestFactory(),
+        new TranscriptExportFactory(),
         new TranscriptDeployFactory(),
+        new TranscriptDescribeFactory(),
+        new SolrIngestFactory(),
     };
 
     public static void main(String[] args) {
@@ -139,6 +141,11 @@ public class Main {
                 .withDescription("Overwrite any pre-existing json files with matching names")
                 .hasArg(false)
                 .create());
+        options.addOption(OptionBuilder
+                .withLongOpt("jsonurlprefix")
+                .withDescription("The public url from which the jsonpath identifies transcripts")
+                .hasArg(true)
+                .create("u"));
 
 
         return options;
