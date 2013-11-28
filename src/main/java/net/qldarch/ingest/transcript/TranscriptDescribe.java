@@ -21,6 +21,7 @@ import org.slf4j.LoggerFactory;
 
 import net.qldarch.ingest.Configuration;
 import net.qldarch.ingest.IngestStage;
+import net.qldarch.service.rdf.KnownPrefixes;
 import net.qldarch.service.rdf.MetadataRepositoryException;
 import net.qldarch.service.rdf.RdfDataStoreDao;
 import net.qldarch.service.rdf.RdfDescription;
@@ -115,7 +116,7 @@ public class TranscriptDescribe implements IngestStage {
         RdfDescription rdf = new RdfDescription();
         rdf.setUri(interview);
         rdf.addProperty("qldarch:transcriptLocation", jsonURI);
-        rdf.addProperty("rdf:type", "qldarch:Interview");
+        rdf.addProperty("rdf:type", KnownPrefixes.resolve("qldarch:Interview"));
 
         User td = new User("transcript.describe");
 
