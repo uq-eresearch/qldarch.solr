@@ -15,6 +15,8 @@ public class Configuration {
     public static String DEFAULT_REPOSITORY = "QldarchMetadataServer";
     public static String DEFAULT_ARCHIVE_PREFIX = "http://qldarch.net/omeka/archive/files/";
     public static String DEFAULT_SOLR_URL = "http://localhost:8080/solr/update";
+    public static String DEFAULT_WEB_BASE = "/var/www/html";
+    public static String DEFAULT_JSON_PATH = "static/transcripts/json";
 
     private File outputdir;
     private List<String> stages;
@@ -23,6 +25,9 @@ public class Configuration {
     private String archivePrefix;
     private URL solrURL;
     private boolean solrOverwrite;
+    private File webBase;
+    private File jsonPath;
+    private boolean forceDeploy;
 
     public Configuration(CommandLine commandLine, Set<String> validStages)
             throws ConfigurationException {
@@ -34,6 +39,9 @@ public class Configuration {
             this.archivePrefix = fetchWithDefault(commandLine, "archive", DEFAULT_ARCHIVE_PREFIX);
             this.solrURL = new URL(fetchWithDefault(commandLine, "solrurl", DEFAULT_SOLR_URL));
             this.solrOverwrite = commandLine.hasOption("solroverwrite");
+            this.webBase = new File(fetchWithDefault(commandLine, "webbase", DEFAULT_WEB_BASE));
+            this.jsonPath = new File(fetchWithDefault(commandLine, "jsonpath", DEFAULT_JSON_PATH));
+            this.forceDeploy = commandLine.hasOption("forcedeploy");
 
             validateStages(stages, validStages);
         } catch (Exception e) {
@@ -51,6 +59,9 @@ public class Configuration {
     public String getArchivePrefix() { return archivePrefix; }
     public URL getSolrURL() { return solrURL; }
     public boolean getSolrOverwrite() { return solrOverwrite; }
+    public File getWebBase() { return webBase; }
+    public File getJsonPath() { return jsonPath; }
+    public boolean getForceDeploy() { return forceDeploy; }
 
     public static String fetchWithDefault(CommandLine commandLine, String option, String defult) {
         if (commandLine.hasOption(option)) {

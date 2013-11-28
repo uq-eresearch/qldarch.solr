@@ -16,6 +16,7 @@ import org.apache.commons.cli.ParseException;
 import org.apache.commons.lang3.StringUtils;
 
 import net.qldarch.ingest.transcript.SolrIngestFactory;
+import net.qldarch.ingest.transcript.TranscriptDeployFactory;
 import net.qldarch.ingest.transcript.TranscriptExportFactory;
 import net.qldarch.ingest.articles.ArticleExportFactory;
 
@@ -24,6 +25,7 @@ public class Main {
         new TranscriptExportFactory(),
         new ArticleExportFactory(),
         new SolrIngestFactory(),
+        new TranscriptDeployFactory(),
     };
 
     public static void main(String[] args) {
@@ -120,6 +122,24 @@ public class Main {
                     "to overwrite preexisting entries.")
                 .hasArg(false)
                 .create());
+        options.addOption(OptionBuilder
+                .withLongOpt("webbase")
+                .withDescription("Web root directory. Default is " +
+                    Configuration.DEFAULT_WEB_BASE)
+                .hasArg(true)
+                .create("w"));
+        options.addOption(OptionBuilder
+                .withLongOpt("jsonpath")
+                .withDescription("Path under web_base to transcript json files. Default is " +
+                    Configuration.DEFAULT_JSON_PATH)
+                .hasArg(true)
+                .create("j"));
+        options.addOption(OptionBuilder
+                .withLongOpt("forcedeploy")
+                .withDescription("Overwrite any pre-existing json files with matching names")
+                .hasArg(false)
+                .create());
+
 
         return options;
     }

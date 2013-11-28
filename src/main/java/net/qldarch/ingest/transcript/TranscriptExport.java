@@ -249,7 +249,7 @@ public class TranscriptExport implements IngestStage {
         File xmlFile = new File(configuration.getOutputDir(),
                 FilenameUtils.getBaseName(source) + "-solr.xml");
         if (xmlFile.exists()) {
-            summary.setProperty("solr", xmlFile.getAbsoluteFile().toString());
+            summary.setProperty("solr.input", xmlFile.getAbsoluteFile().toString());
             System.out.println("Error, " + xmlFile + " already exists");
             return;
         }
