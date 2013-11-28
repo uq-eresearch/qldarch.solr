@@ -8,7 +8,7 @@ import java.util.regex.Pattern;
 public class Validators {
     public static Logger logger = LoggerFactory.getLogger(Validators.class);
 
-    public static final Pattern USERNAME_REGEX = Pattern.compile("[a-zA-Z0-9_]{3,}");
+    public static final Pattern USERNAME_REGEX = Pattern.compile("[a-zA-Z0-9_.-]{3,}");
 
     public static String username(String username) {
         if (username == null) {
