@@ -115,6 +115,7 @@ public class TranscriptDescribe implements IngestStage {
         RdfDescription rdf = new RdfDescription();
         rdf.setUri(interview);
         rdf.addProperty("qldarch:transcriptLocation", jsonURI);
+        rdf.addProperty("rdf:type", "qldarch:Interview");
 
         User td = new User("transcript.describe");
 
