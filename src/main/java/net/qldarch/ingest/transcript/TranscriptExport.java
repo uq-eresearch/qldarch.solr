@@ -143,6 +143,16 @@ public class TranscriptExport implements IngestStage {
                                     archiveFiles.firstByMimeType("text/rtf")).or(
                                     archiveFiles.firstByMimeType("application/msword"));
 
+                                // Hack to allow for Omeka wrongly detecting mimetype for
+                                // .docx files as application/zip
+                                if (!textFile.isPresent()) {
+                                    textFile = archiveFiles.firstByMimeType("application/zip");
+                                    if (textFile.isPresent() &&
+                                            !textFile.get().sourceFile.endsWith(".docx")) {
+                                        textFile = Optional.absent();
+                                    }
+                                }
+
                                 TranscriptParser parser;
                                 if (textFile.isPresent()) {
                                     parser = new TranscriptParser(

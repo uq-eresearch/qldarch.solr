@@ -85,6 +85,12 @@ public class ArchiveFile {
                return new PDFParser();
             case "application/msword":
                return new OfficeParser();
+            case "application/zip":
+               if (sourceFile.endsWith(".docx")) {
+                   return new OfficeParser();
+               } else {
+                   return ErrorParser.INSTANCE;
+               }
             default:
                return ErrorParser.INSTANCE;
         }
