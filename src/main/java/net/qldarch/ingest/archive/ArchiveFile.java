@@ -6,6 +6,7 @@ import org.apache.tika.parser.Parser;
 import org.apache.tika.parser.ParsingReader;
 import org.apache.tika.parser.ErrorParser;
 import org.apache.tika.parser.microsoft.OfficeParser;
+import org.apache.tika.parser.microsoft.ooxml.OOXMLParser;
 import org.apache.tika.parser.pdf.PDFParser;
 import org.apache.tika.parser.rtf.RTFParser;
 import org.apache.tika.parser.txt.TXTParser;
@@ -87,7 +88,7 @@ public class ArchiveFile {
                return new OfficeParser();
             case "application/zip":
                if (sourceFile.endsWith(".docx")) {
-                   return new OfficeParser();
+                   return new OOXMLParser();
                } else {
                    return ErrorParser.INSTANCE;
                }
