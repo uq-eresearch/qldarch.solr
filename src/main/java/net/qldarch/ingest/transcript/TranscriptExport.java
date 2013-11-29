@@ -277,6 +277,6 @@ public class TranscriptExport implements IngestStage {
                 OutputFormat.createPrettyPrint());
         writer.write(document);
         writer.close();
-        summary.setProperty("solr", xmlFile.getAbsoluteFile().getCanonicalFile().toString());
+        summary.setProperty("solr.input", xmlFile.getAbsoluteFile().getCanonicalFile().toString());
     }
 }
