@@ -29,7 +29,7 @@
     <property name="src.test.resources" location="${src}/test/resources"/>
     <property name="build.main.java" location="${build}/jvm/classes"/>
     <property name="build.test.java" location="${build}/test/classes"/>
-    <property name="dist"  location="dist"/>
+    <property name="dist"  location="C:\opt\cygwin\home\uqsmcnau\transcript"/>
     <property name="test.dir" location="test"/>
     <property name="test.data.dir" location="${test.dir}/data"/>
     <property name="reports.dir" location="${test.dir}/reports"/>

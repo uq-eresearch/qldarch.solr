@@ -8,10 +8,10 @@ import java.io.PrintWriter;
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
 import java.net.URL;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Properties;
+import java.util.*;
+import javax.mail.*;
+import javax.mail.internet.*;
+import javax.activation.*;
 
 import com.google.common.base.Optional;
 import org.apache.commons.io.FilenameUtils;
@@ -59,12 +59,13 @@ public class TranscriptExport implements IngestStage {
 
     public static String TRANSCRIPT_QUERY =
         " prefix qldarch: <http://qldarch.net/ns/rdf/2012-06/terms#>" +
-        " select ?file ?tloc ?srcfile ?mimetype where {" + 
+        " select ?file ?tloc ?srcfile ?mimetype ?contact where {" + 
         "   graph <http://qldarch.net/ns/omeka-export/2013-02-06> {" +
         "     <%~transcript~%> qldarch:hasFile ?file ." +
         "     ?file qldarch:systemLocation ?tloc ." +
         "     ?file qldarch:sourceFilename ?srcfile ." +
         "     ?file qldarch:basicMimeType ?mimetype ." +
+        "     OPTIONAL { <%~transcript~%> qldarch:contact ?contact . }" +
         "   }" +
         " }";
 
@@ -110,6 +111,7 @@ public class TranscriptExport implements IngestStage {
                             Value location = fbs.getValue("tloc");
                             Value sourceFilename = fbs.getValue("srcfile");
                             Value mimetype = fbs.getValue("mimetype");
+                            Value contact = fbs.getValue("contact");
 
                             if (!(file instanceof URI)) {
                                 System.out.println("file(" + file.toString() + ") not URI");
@@ -126,7 +128,8 @@ public class TranscriptExport implements IngestStage {
                                 new java.net.URI(file.toString()),
                                 ((Literal)location).getLabel(),
                                 ((Literal)sourceFilename).getLabel(),
-                                ((Literal)mimetype).getLabel()));
+                                ((Literal)mimetype).getLabel(),
+                                (contact != null ? ((Literal)contact).getLabel() : "")));
                         }
                         fileResult.close();
 
@@ -170,6 +173,11 @@ public class TranscriptExport implements IngestStage {
                                     System.out.println(interview.toString() + " " +
                                            transcript.toString() + " " +
                                            ei.getMessage());
+
+                                    flagIngest("Issue ingesting transcript involving items, " +
+                                            interview.toString() + " and " +
+                                            transcript.toString() + ".\n\n" +
+                                            ei.getMessage(), textFile);
                                     continue;
                                 }
 
@@ -212,6 +220,31 @@ public class TranscriptExport implements IngestStage {
         } catch (QueryEvaluationException eq) {
             eq.printStackTrace();
         }
+    }
+    
+    private void flagIngest(String bodyText, Optional<ArchiveFile> textFile) {
+    	if (textFile.isPresent() && textFile.get().getContact() != null 
+    			&& !textFile.get().getContact().isEmpty()) {
+    		try {
+	    		String host = "localhost.localdomain";    
+	        	String to = textFile.get().getContact();
+	        	String from = "no-reply@eait.uq.edu.au";   
+	        	Properties properties = System.getProperties();  
+	        	properties.setProperty("mail.smtp.host", host);  
+	        
+	        	Session session = Session.getDefaultInstance(properties);  
+	        	MimeMessage message = new MimeMessage(session);  
+				message.addRecipient(Message.RecipientType.TO, new InternetAddress(to));
+	        	message.setFrom(new InternetAddress(from));
+	
+	        	message.setSubject("Qldarch Ingest Failure");  
+	        	message.setText(bodyText);  
+	        	Transport.send(message);  
+	        	System.out.println("Sending Report to " + to); 		
+	    	} catch (Exception e) {
+				e.printStackTrace();
+			}
+    	}
     }
 
     private Properties prepareSummary(URL interview, URL transcript, ArchiveFiles afs) {

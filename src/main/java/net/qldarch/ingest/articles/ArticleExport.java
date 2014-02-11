@@ -63,12 +63,13 @@ public class ArticleExport implements IngestStage {
 
     public static String FILE_FOR_OBJECT_QUERY =
         " prefix qldarch: <http://qldarch.net/ns/rdf/2012-06/terms#>" +
-        " select ?file ?sysloc ?srcfile ?mimetype where {" + 
+        " select ?file ?sysloc ?srcfile ?mimetype ?contact where {" + 
         "   graph <http://qldarch.net/ns/omeka-export/2013-02-06> {" +
         "     <%~item~%> qldarch:hasFile ?file ." +
         "     ?file qldarch:systemLocation ?sysloc ." +
         "     ?file qldarch:sourceFilename ?srcfile ." +
         "     ?file qldarch:basicMimeType ?mimetype ." +
+        "     OPTIONAL { <%~item~%> qldarch:contact ?contact . }" +
         "   }" +
         " }";
 
@@ -133,6 +134,7 @@ public class ArticleExport implements IngestStage {
                             Value location = fbs.getValue("sysloc");
                             Value sourceFilename = fbs.getValue("srcfile");
                             Value mimetype = fbs.getValue("mimetype");
+                            Value contact = fbs.getValue("contact");
 
                             if (!(file instanceof URI)) {
                                 System.out.println("file(" + file.toString() + ") not URI");
@@ -149,7 +151,8 @@ public class ArticleExport implements IngestStage {
                                 new java.net.URI(file.toString()),
                                 ((Literal)location).getLabel(),
                                 ((Literal)sourceFilename).getLabel(),
-                                ((Literal)mimetype).getLabel()));
+                                ((Literal)mimetype).getLabel(),
+                                (contact != null ? ((Literal)contact).getLabel() : "")));
                         }
                         fileResult.close();
 

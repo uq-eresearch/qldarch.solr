@@ -33,16 +33,22 @@ public class ArchiveFile {
     public final String location;
     public final String sourceFile;
     public final String mimetype;
+    public final String contact;
 
     public ArchiveFile(String item, URI fileURI, String location,
-            String sourceFile, String mimetype) {
+            String sourceFile, String mimetype, String contact) {
         this.item = item;
         this.fileURI = fileURI;
         this.location = location;
         this.sourceFile = sourceFile;
         this.mimetype = mimetype;
+        this.contact = contact;
     }
 
+    public String getContact() {
+    	return contact;
+    }
+    
     public String toString() {
         return String.format("ArchiveFile(%s, %s, %s, %s, %s)",
                 item, fileURI, location, sourceFile, mimetype);
